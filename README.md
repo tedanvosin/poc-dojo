@@ -16,13 +16,12 @@
 ```bash
 cp safe.dojo.yml dojo.yml   # start with the safe version
 ```
-- And create a new dojo with a regular account. Note the reference id, e.g. `totally-normal-dojo~a1b2c3d4`.
+- And create a new dojo with a regular account.
 
 **2 - Arm the dojo**
 
 - With the dojo created, goto dojo admin page, copy the update link and replace `__UPDATE__LINK__` in DESCRIPTION.md with it.
 - Commit the changes and update the dojo.
-- Load the dojo page — a broken-image icon means the trap is armed.
 
 **3 - push phase 2**
 
