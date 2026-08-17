@@ -1,75 +1,54 @@
-# The malicious dojo — push this to GitHub
-
-Two files, pushed in two phases. **Order matters**: if `files:` is present when you
-create the dojo, `dojo_create` runs `dojo_initialize_files` under *your* session,
-hits `assert is_admin()` at `utils/dojo.py:309`, and the whole create fails with
-
-```
-yml-specified files support requires admin privileges
-```
-
-That assert is the real gate on this bug, and it is working as intended. The attack
-does not defeat it — it borrows an **admin's** session instead.
+# The malicious POC dojo for RCE in CTFd container on pwn.college
 
 | File | Role |
 |---|---|
-| `dojo.yml` | phase 1 — no `files:` block, so an ordinary user can create the dojo |
-| `dojo.phase2.yml` | phase 2 — same dojo plus the `files:` payload; push this *after* the dojo exists |
-| `DESCRIPTION.md` | placeholder; `arm.py` writes the real one into the database |
-| `module/challenge/` | makes the dojo structurally valid |
+| `safe.dojo.yml` | phase 1 — no `files:` block, so an ordinary user can create the dojo |
+| `poc.dojo.yml` | phase 2 — same dojo plus the payload |
+| `DESCRIPTION.md` | holds the `__UPDATE__LINK__` placeholder you fill in at step 2 |
 
-## Sequence
 
-**1 — push phase 1 and create the dojo** (ordinary account, no admin rights)
+## Exploit
 
+**1 - Create the dojo**
+
+- Fork this dojo
+- run
 ```bash
-cp dojo.yml /path/to/your/repo/dojo.yml   # already the phase-1 version
-git -C /path/to/your/repo add -A && git -C /path/to/your/repo commit -m "my dojo" && git push
+cp safe.dojo.yml dojo.yml   # start with the safe version
 ```
+- And create a new dojo with a regular account. Note the reference id, e.g. `totally-normal-dojo~a1b2c3d4`.
 
-Create it at `/dojos/create` with your repo, e.g. `alice/totally-normal-dojo`.
-Note the reference id it returns, e.g. `totally-normal-dojo~a1b2c3d4`.
+**2 - Arm the dojo**
 
-**2 — arm it**
+- With the dojo created, goto dojo admin page, copy the update link and replace `__UPDATE__LINK__` in DESCRIPTION.md with it.
+- Commit the changes and update the dojo.
+- Load the dojo page — a broken-image icon means the trap is armed.
 
+**3 - push phase 2**
+
+- Update the dojo.yml to the poc:
 ```bash
-python3 ../arm.py --dojo totally-normal-dojo~a1b2c3d4 --user alice
+cp poc.dojo.yml dojo.yml
 ```
+- Add and commit the changes.
 
-This reads your own `update_code` from `/dojo/<ref>/admin/` — `dojo_admin.html:25`
-renders that link for the dojo's owner, with no `is_admin()` guard — and then sets
-the dojo description to a 1×1 `<img>` pointing at your own update URL, via
-`POST /pwncollege_api/v1/dojos/<dojo>/update`, which is gated by `dojo_admins_only`,
-meaning you. Both steps verified working from a non-admin account.
+**4 - wait for admin to open the dojo**
 
-**3 — push phase 2**
+When an admin opens the dojo, their browser fetches the `<img>` as an ordinary
+same-origin subresource — no form, no click, no CSRF token. `update_dojo` has no auth
+decorator and is CSRF-exempt, so it re-pulls your repo under their session, where
+`is_admin()` is now true, and writes the payload as root.
 
-```bash
-cp dojo.phase2.yml /path/to/your/repo/dojo.yml
-git -C /path/to/your/repo commit -am "tweak" && git push
-```
-
-Do **not** open the update URL yourself. Your session is not an admin, so it returns
-400 and writes nothing.
-
-**4 — wait**
-
-An admin opens `/<your-ref>/`. Their browser fetches the `<img>` as an ordinary
-same-origin subresource — no CSRF token, no form, no click — `update_dojo` re-pulls
-your repo under their session, `is_admin()` is now true, and the payload is written
-as root.
+**Verify**
 
 ```bash
 docker exec dojo docker exec ctfd cat /tmp/POC_D01_PWNED
 # pwned as uid=0 via ['-c']
 ```
 
-`/admin/dojos` lists every dojo as a link to its public page, so that click is one
-step from the admin index.
 
 ## Payload
 
-`dojo.phase2.yml` writes an inert marker via a `.pth` file in the CTFd venv. It
+`poc.dojo.yml` writes an inert marker via a `.pth` file in the CTFd venv. It
 executes on every Python start in that container — including the Docker healthcheck,
-which runs every 10 seconds — until removed. Clean up with
-`python3 ../host_dojo.py --reset` or `python3 ../../cleanup.py`.
+which runs every 10 seconds — until removed.

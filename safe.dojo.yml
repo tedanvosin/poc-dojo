@@ -1,7 +1,3 @@
-# PHASE 1 — the dojo as it looks when you first create it.
-# No `files:` block, so `dojo_create` succeeds for an ordinary user.
-# After the dojo exists, swap in dojo.phase2.yml. See README.md.
-
 id: totally-normal-dojo
 name: Totally Normal Dojo
 type: public

